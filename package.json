@@ -1,0 +1,110 @@
+{
+  "name": "shiftnotes",
+  "version": "1.0.0",
+  "description": "A focused technical document editor with free image placement, code, summaries, and branded PDF export",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "playwright test",
+    "desktop": "npm run build && electron .",
+    "desktop:build": "npm run build && node scripts/stage-desktop.mjs && electron-builder --win portable --x64",
+    "desktop:unpacked": "npm run build && node scripts/stage-desktop.mjs && electron-builder --dir",
+    "test:desktop": "npm run build && node tests/desktop-smoke.mjs",
+    "test:imports": "node --test tests/imports.unit.mjs",
+    "postinstall": "node node_modules/electron/install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabriewlw/SHIFTnotes.git"
+  },
+  "keywords": [],
+  "author": "SHIFTnotes",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/gabriewlw/SHIFTnotes/issues"
+  },
+  "homepage": "https://github.com/gabriewlw/SHIFTnotes#readme",
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/lato": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/merriweather": "^5.3.0",
+    "@fontsource/open-sans": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "@tiptap/extension-code-block-lowlight": "^3.32.0",
+    "@tiptap/extension-font-family": "^3.32.0",
+    "@tiptap/extension-highlight": "^3.32.0",
+    "@tiptap/extension-link": "^3.32.0",
+    "@tiptap/extension-placeholder": "^3.32.0",
+    "@tiptap/extension-table": "^3.32.0",
+    "@tiptap/extension-text-align": "^3.32.0",
+    "@tiptap/extension-text-style": "^3.32.0",
+    "@tiptap/react": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
+    "html2canvas": "^1.4.1",
+    "ipaddr.js": "^2.5.0",
+    "jspdf": "^4.2.1",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^1.61.0",
+    "papaparse": "^5.7.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "prettier": "^3.9.10",
+    "vite": "^8.3.5"
+  },
+  "build": {
+    "appId": "com.shiftnotes.app",
+    "productName": "SHIFTnotes",
+    "directories": {
+      "output": "release",
+      "app": ".desktop-app"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "SHIFTnotes-${version}-Windows-${arch}.${ext}"
+    },
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Office"
+    },
+    "electronVersion": "45.0.0"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
+  }
+}
