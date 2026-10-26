@@ -39,6 +39,12 @@ Complete-backup envelope version 1 and data schemas 1–2 are supported, includi
 
 Import limits: 200 MB compressed input and uncompressed archive contents, 25,000 rows/100 columns per workbook sheet, 500 rows/12 selected columns per inserted table, 250 KB for code previews, and 5 MB per original attachment. Insert successive ranges for long lists. Spreadsheet formulas are treated as literal text and never evaluated. Imported records include a source filename and import date; they do not update automatically when AVTrack changes.
 
+## Dark documents and printing
+
+The workspace and documents use the AVTrack / BroadcastGab charcoal and red palette, with DM Sans body text, Space Grotesk headings, and JetBrains Mono code/IP addresses. Brand presets remain available in **Brand & export settings**.
+
+**Export PDF** preserves the dark document background across the whole PDF page, including page margins. For physical printing, open **Document menu → Print / Save as PDF** or press **Ctrl/Cmd+P**. Choose **White paper** (the default) for dark text on white paper, or **Dark document** to retain the document colors. In browser print dialogs, enable background graphics for dark printing. Printing does not change the editing theme or the appearance of subsequent PDF exports.
+
 ## Local data
 
 The initial version uses the embedded browser's local storage, shared by windows of the app on the same Windows user profile. There is no server, account, cloud synchronization, or network requirement for writing. Storage quota errors are shown; image/attachment-heavy workspaces can exhaust local storage. Use **Document menu → Back up workspace** regularly. Backup imports are additive.
@@ -81,3 +87,17 @@ Browser-mode PDF downloads use rasterization to preserve layout. Use the Windows
 ## Reference provenance
 
 AVTrack formats, fonts, color tokens, and synthetic compatibility fixtures were inspected at commit `3da366b41b25c3148994193101acc41b3b058121` of [gabriewlw/avtrack](https://github.com/gabriewlw/avtrack). The fixture files in `tests/fixtures/` are synthetic examples from that project, not customer backup data. No changes were made to AVTrack.
+
+## Document references
+
+Select words in a document and choose **Insert document reference** in the toolbar. With no selection, the reference name is inserted at the cursor. Choose:
+
+- **SHIFTnotes document** to link an older handover, SOP, or other note. Click its inline link or its entry in the document's **References** section, then **Open document**.
+- **Stored file** to upload a manual, spreadsheet, or reference document (up to 20 MB each), or reuse a previously stored file. Copies live in the app's local file storage and are included in workspace backups. **Save a copy** retrieves the original bytes. In the desktop app, **Open in default app** opens a temporary copy; changes made in another app do not replace the stored reference.
+- **Local file path** to point to an original file without copying it. The desktop app offers **Browse files** and **Open linked file** for supported document types. Browser mode provides the path for copying. Moving or deleting the original breaks the link; backups preserve the path, not its contents.
+
+Reference files are not embedded in exported PDFs. The PDF includes the reference names and, for path references, their paths. Workspace backup format 2 includes stored files and preserves links between imported documents; older format-1 backups can still be imported. Backups up to 200 MB are supported. Stored files persist separately from document text; clearing app/browser data removes both unless backed up.
+
+## Step-by-step guides
+
+Choose **Document templates → Step-by-step guide**, or use **Insert tutorial step** in any document. Give each step a title and add instructions, a screenshot/image, or both. PNG, JPEG, GIF, and WebP images up to 5 MB are supported, with optional captions. Steps append in order and number automatically; edit their headings and instructions directly on the page. Step images remain in the document flow beside the instructions, and are preserved in workspace backups, dark PDF exports, and white-background printing. Large images still count toward the editor's local document-storage quota; check the save status and keep backups.

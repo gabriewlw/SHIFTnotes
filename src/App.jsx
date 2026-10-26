@@ -62,6 +62,15 @@ import {
   summarize,
 } from "./document";
 import { Attachment, CanvasSpacer } from "./Attachment";
+import {
+  ReferenceLink,
+  backupReferenceFiles,
+  restoreReferenceFiles,
+  saveReferenceFiles,
+  validReferences,
+} from "./references";
+import { ReferencePicker, ReferenceDetails } from "./ReferencePicker";
+import { GuideStep, GuideImage, TutorialStepForm } from "./GuideStep";
 const AvtrackImport = React.lazy(() => import("./AvtrackImport"));
 import { IPHighlight } from "./editor";
 
@@ -223,8 +232,35 @@ export default function App() {
     () => localStorage.getItem("shiftnotes.active") || "studio-network",
   );
   const [brand, setBrand] = useState(() =>
-    readSaved("shiftnotes.brand.v1", DEFAULT_BRAND),
+    (() => {
+      const saved = readSaved("shiftnotes.brand.v1", DEFAULT_BRAND);
+      return saved.primary === "#173f3d" &&
+        saved.accent === "#d6a566" &&
+        saved.name === "SHIFTnotes"
+        ? { ...saved, ...DEFAULT_BRAND }
+        : saved;
+    })(),
   );
+  const [openedReference, setOpenedReference] = useState(null);
+  const [printTheme, setPrintTheme] = useState("white");
+  useEffect(() => {
+    document.documentElement.dataset.printTheme = printTheme;
+  }, [printTheme]);
+  useEffect(() => {
+    const openPrint = () => setModal("print");
+    const shortcut = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        openPrint();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    const unsubscribe = window.shiftDesktop?.onPrintRequested(openPrint);
+    return () => {
+      window.removeEventListener("keydown", shortcut);
+      unsubscribe?.();
+    };
+  }, []);
   const [filter, setFilter] = useState("All documents"),
     [search, setSearch] = useState(""),
     [panel, setPanel] = useState(window.innerWidth >= 900 ? "outline" : null),
@@ -247,6 +283,8 @@ export default function App() {
     importRef = useRef(),
     toastTimer = useRef();
   const activeDoc = docs.find((d) => d.id === activeId) || docs[0];
+  const docsRef = useRef(docs);
+  docsRef.current = docs;
   const currentRef = useRef(activeDoc.id);
   currentRef.current = activeDoc.id;
   const notify = (message) => {
@@ -273,6 +311,9 @@ export default function App() {
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       IPHighlight,
       Attachment,
+      ReferenceLink,
+      GuideStep,
+      GuideImage,
       CanvasSpacer,
       TextStyle,
       FontFamily,
@@ -443,28 +484,45 @@ export default function App() {
       "Image added. Drag it anywhere; use arrow keys for precise placement.",
     );
   }
-  const downloadBackup = () => {
-    const blob = new Blob(
-        [JSON.stringify({ version: 1, documents: docs, brand }, null, 2)],
-        { type: "application/json" },
-      ),
-      url = URL.createObjectURL(blob),
-      a = document.createElement("a");
-    a.href = url;
-    a.download = "SHIFTnotes-backup.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setMenu(false);
-    notify("Workspace backup downloaded");
+  const downloadBackup = async () => {
+    try {
+      const referenceFiles = await backupReferenceFiles();
+      const blob = new Blob(
+          [
+            JSON.stringify(
+              { version: 2, documents: docs, brand, referenceFiles },
+              null,
+              2,
+            ),
+          ],
+          { type: "application/json" },
+        ),
+        a = document.createElement("a");
+      if (blob.size > 200 * 1024 * 1024)
+        throw Error(
+          "The workspace exceeds the 200 MB backup limit. Save copies of large references and remove unused stored files before retrying.",
+        );
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = "SHIFTnotes-backup.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMenu(false);
+      notify("Workspace backup downloaded");
+    } catch (err) {
+      notify(`Backup failed: ${err.message}`);
+    }
   };
   const importBackup = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     try {
+      if (file.size > 200 * 1024 * 1024)
+        throw Error("Workspace backups can be up to 200 MB.");
       const backup = JSON.parse(await file.text());
       if (
-        backup.version !== 1 ||
+        ![1, 2].includes(backup.version) ||
         !Array.isArray(backup.documents) ||
         !backup.documents.length ||
         !backup.documents.every(
@@ -472,6 +530,7 @@ export default function App() {
             typeof d.id === "string" &&
             typeof d.title === "string" &&
             typeof d.content === "string" &&
+            validReferences(d.references) &&
             Array.isArray(d.images) &&
             d.images.every(
               (i) =>
@@ -482,20 +541,43 @@ export default function App() {
         )
       )
         throw Error();
+      if (
+        new Set(backup.documents.map((d) => d.id)).size !==
+        backup.documents.length
+      )
+        throw Error("Duplicate document IDs in backup.");
+      const restored = restoreReferenceFiles(backup.referenceFiles);
+      const documentIds = new Map(
+        backup.documents.map((d) => [d.id, crypto.randomUUID()]),
+      );
       const imported = backup.documents.map((d) => ({
         ...d,
-        id: crypto.randomUUID(),
+        id: documentIds.get(d.id),
+        references: (d.references || []).map((ref) => ({
+          ...ref,
+          ...(ref.kind === "document"
+            ? { documentId: documentIds.get(ref.documentId) || ref.documentId }
+            : {}),
+          ...(ref.kind === "stored"
+            ? { fileId: restored.ids.get(ref.fileId) || ref.fileId }
+            : {}),
+        })),
         folder: ["Engineering", "Operations"].includes(d.folder)
           ? d.folder
           : "Engineering",
         summary: typeof d.summary === "string" ? d.summary : "",
         updated: Date.now(),
       }));
-      setDocs((p) => [...imported, ...p]);
+      await saveReferenceFiles(restored.files);
+      const nextDocs = [...imported, ...docsRef.current];
+      localStorage.setItem("shiftnotes.documents.v1", JSON.stringify(nextDocs));
+      setDocs(nextDocs);
       setActiveId(imported[0].id);
       notify(`${imported.length} documents imported`);
     } catch {
-      notify("This file is not a valid SHIFTnotes backup.");
+      notify(
+        "Could not import backup. Check its format and available storage.",
+      );
     }
   };
   const doExport = async () => {
@@ -564,7 +646,7 @@ export default function App() {
         "--brand": brand.primary,
         "--brand-accent": brand.accent,
         "--body-font": brand.bodyFont || "DM Sans",
-        "--heading-font": brand.headingFont || "Manrope",
+        "--heading-font": brand.headingFont || "Space Grotesk",
       }}
     >
       <aside className={`sidebar ${mobileNav ? "mobile-open" : ""}`}>
@@ -789,7 +871,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       setMenu(false);
-                      window.print();
+                      setModal("print");
                     }}
                   >
                     <FileText size={15} />
@@ -913,6 +995,18 @@ export default function App() {
                     <Link2 size={17} />
                   </Button>
                   <Button
+                    label="Insert tutorial step"
+                    onClick={() => setModal("tutorial-step")}
+                  >
+                    <ListOrdered size={17} />
+                  </Button>
+                  <Button
+                    label="Insert document reference"
+                    onClick={() => setModal("reference")}
+                  >
+                    <BookOpen size={17} />
+                  </Button>
+                  <Button
                     label="Insert image"
                     onClick={() => fileRef.current.click()}
                   >
@@ -993,7 +1087,25 @@ export default function App() {
                     </span>
                   </div>
                 </div>
-                <EditorContent editor={editor} />
+                <EditorContent
+                  editor={editor}
+                  onClickCapture={(event) => {
+                    const link = event.target.closest("a[data-reference-id]");
+                    if (!link) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const reference = activeDoc.references?.find(
+                      (ref) => ref.id === link.dataset.referenceId,
+                    );
+                    if (reference) {
+                      setOpenedReference(reference);
+                      setModal("reference-details");
+                    } else
+                      notify(
+                        "This reference is missing. Attach or link it again.",
+                      );
+                  }}
+                />
                 {activeDoc.summary && (
                   <section
                     className="saved-summary"
@@ -1002,6 +1114,33 @@ export default function App() {
                     <div className="eyebrow">DOCUMENT SUMMARY</div>
                     {activeDoc.summary.split("\n\n").map((p, i) => (
                       <p key={i}>{p}</p>
+                    ))}
+                  </section>
+                )}
+                {activeDoc.references?.length > 0 && (
+                  <section
+                    className="document-references"
+                    style={{ marginTop: activeDoc.summary ? 24 : summaryGap }}
+                  >
+                    <h3>References</h3>
+                    {activeDoc.references.map((ref) => (
+                      <div key={ref.id}>
+                        <button
+                          onClick={() => {
+                            setOpenedReference(ref);
+                            setModal("reference-details");
+                          }}
+                        >
+                          {ref.name}
+                        </button>
+                        <small>
+                          {ref.kind === "path"
+                            ? ref.path
+                            : ref.kind === "stored"
+                              ? "Stored reference file"
+                              : "SHIFTnotes document"}
+                        </small>
+                      </div>
                     ))}
                   </section>
                 )}
@@ -1451,6 +1590,104 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {modal === "tutorial-step" && (
+        <Modal title="Add a tutorial step" onClose={() => setModal(null)}>
+          <TutorialStepForm
+            onInsert={(step) => {
+              // A step is a top-level section; append without nesting inside an existing step.
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(editor.state.doc.content.size, [
+                  ...(summaryGap > 40
+                    ? [{ type: "canvasSpacer", attrs: { height: summaryGap } }]
+                    : []),
+                  step,
+                  { type: "paragraph" },
+                ])
+                .run();
+              setModal(null);
+              notify("Tutorial step added");
+            }}
+          />
+        </Modal>
+      )}
+      {modal === "reference" && (
+        <Modal title="Add a document reference" onClose={() => setModal(null)}>
+          <ReferencePicker
+            documents={docs}
+            currentId={activeDoc.id}
+            onInsert={(reference) => {
+              if (editor.state.selection.empty)
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent({
+                    type: "text",
+                    text: reference.name,
+                    marks: [
+                      { type: "referenceLink", attrs: { id: reference.id } },
+                    ],
+                  })
+                  .run();
+              else
+                editor
+                  .chain()
+                  .focus()
+                  .unsetMark("link")
+                  .setMark("referenceLink", { id: reference.id })
+                  .run();
+              updateDoc({
+                references: [...(activeDoc.references || []), reference],
+              });
+              setModal(null);
+              notify("Reference linked");
+            }}
+          />
+        </Modal>
+      )}
+      {modal === "reference-details" && openedReference && (
+        <Modal title="Document reference" onClose={() => setModal(null)}>
+          <ReferenceDetails
+            reference={openedReference}
+            documents={docs}
+            onNavigate={(id) => {
+              setActiveId(id);
+              setModal(null);
+            }}
+          />
+          <div className="modal-actions">
+            <button className="outline-button" onClick={() => setModal(null)}>
+              Close
+            </button>
+            <button
+              onClick={() => {
+                const content = editor.getJSON();
+                const removeMark = (node) => {
+                  if (node.marks)
+                    node.marks = node.marks.filter(
+                      (mark) =>
+                        mark.type !== "referenceLink" ||
+                        mark.attrs.id !== openedReference.id,
+                    );
+                  node.content?.forEach(removeMark);
+                };
+                removeMark(content);
+                editor.commands.setContent(content);
+                updateDoc({
+                  references: (activeDoc.references || []).filter(
+                    (ref) => ref.id !== openedReference.id,
+                  ),
+                  content: editor.getHTML(),
+                });
+                setModal(null);
+              }}
+            >
+              Remove reference link
+            </button>
+          </div>
+        </Modal>
+      )}
       {modal === "link" && (
         <Modal title="Add a link" onClose={() => setModal(null)}>
           <label className="field">
@@ -1492,6 +1729,75 @@ export default function App() {
               }}
             >
               Insert link
+            </button>
+          </div>
+        </Modal>
+      )}
+      {modal === "print" && (
+        <Modal title="Print document" onClose={() => setModal(null)}>
+          <p className="modal-description">
+            Choose your paper appearance. Export PDF always preserves the dark
+            document design.
+          </p>
+          <div
+            className="print-options"
+            role="radiogroup"
+            aria-label="Print background"
+          >
+            <label>
+              <input
+                type="radio"
+                name="print-theme"
+                value="white"
+                checked={printTheme === "white"}
+                onChange={() => setPrintTheme("white")}
+              />
+              <span>
+                <strong>White paper</strong>
+                <small>
+                  Dark text on a white background. Recommended for physical
+                  printing.
+                </small>
+              </span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="print-theme"
+                value="dark"
+                checked={printTheme === "dark"}
+                onChange={() => setPrintTheme("dark")}
+              />
+              <span>
+                <strong>Dark document</strong>
+                <small>
+                  Keep the charcoal background and document colors. Enable
+                  background graphics in your browser’s print dialog.
+                </small>
+              </span>
+            </label>
+          </div>
+          <div className="modal-actions">
+            <button onClick={() => setModal(null)}>Cancel</button>
+            <button
+              className="primary"
+              onClick={async () => {
+                document.documentElement.dataset.printTheme = printTheme;
+                try {
+                  if (window.shiftDesktop) {
+                    const result = await window.shiftDesktop.printDocument();
+                    if (result.success) notify("Print job sent");
+                    else if (!/cancel/i.test(result.reason || ""))
+                      notify(
+                        "Printing failed. Check your printer and try again.",
+                      );
+                  } else window.print();
+                } catch {
+                  notify("Printing failed. Check your printer and try again.");
+                }
+              }}
+            >
+              Continue to print
             </button>
           </div>
         </Modal>
@@ -1550,7 +1856,7 @@ export default function App() {
               Heading font
               <select
                 aria-label="Default heading font"
-                value={brand.headingFont || "Manrope"}
+                value={brand.headingFont || "Space Grotesk"}
                 onChange={(e) =>
                   setBrand({ ...brand, headingFont: e.target.value })
                 }
@@ -1629,6 +1935,11 @@ export default function App() {
               <FileText />
               <h3>Blank document</h3>
               <p>A clean page for your next idea.</p>
+            </button>
+            <button onClick={() => create("guide")}>
+              <ListOrdered />
+              <h3>Step-by-step guide</h3>
+              <p>Numbered instructions, screenshots, and reference links.</p>
             </button>
             <button onClick={() => create("handover")}>
               <LayoutTemplate />

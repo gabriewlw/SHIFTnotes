@@ -1,8 +1,10 @@
 import ipaddr from "ipaddr.js";
 export const DEFAULT_BRAND = {
   name: "SHIFTnotes",
-  primary: "#173f3d",
-  accent: "#d6a566",
+  primary: "#171a20",
+  accent: "#c92f38",
+  bodyFont: "DM Sans",
+  headingFont: "Space Grotesk",
 };
 const network = `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="260" viewBox="0 0 1100 260"><rect width="1100" height="260" rx="18" fill="#f5f8f7"/><path d="M240 110H470M630 110H860" stroke="#9bb4ad" stroke-width="3" stroke-dasharray="7 7"/><g font-family="Arial" text-anchor="middle"><rect x="45" y="58" width="220" height="105" rx="12" fill="white" stroke="#d3dfda"/><rect x="440" y="58" width="220" height="105" rx="12" fill="#173f3d"/><rect x="835" y="58" width="220" height="105" rx="12" fill="white" stroke="#d3dfda"/><text x="155" y="102" fill="#173f3d" font-size="21" font-weight="bold">Studio A</text><text x="155" y="135" fill="#75857f" font-size="17">192.168.10.21</text><text x="550" y="102" fill="white" font-size="21" font-weight="bold">Core switch</text><text x="550" y="135" fill="#a9c9bf" font-size="17">10.20.0.1</text><text x="945" y="102" fill="#173f3d" font-size="21" font-weight="bold">Playout</text><text x="945" y="135" fill="#75857f" font-size="17">192.168.20.10</text><text x="550" y="220" fill="#75857f" font-size="16">STUDIO NETWORK · SIGNAL FLOW</text></g></svg>`;
 export const initialDocs = [
@@ -55,17 +57,29 @@ export const initialDocs = [
 export function makeDocument(folder = "Engineering", template = "blank") {
   return {
     id: crypto.randomUUID(),
-    title: template === "handover" ? "Untitled handover" : "Untitled document",
+    title:
+      template === "guide"
+        ? "Untitled guide"
+        : template === "handover"
+          ? "Untitled handover"
+          : "Untitled document",
     folder,
-    tag: template === "handover" ? "HANDOVER" : "TECHNICAL NOTE",
+    tag:
+      template === "guide"
+        ? "STEP-BY-STEP GUIDE"
+        : template === "handover"
+          ? "HANDOVER"
+          : "TECHNICAL NOTE",
     updated: Date.now(),
     images: [],
     summary: "",
     pinned: false,
     content:
-      template === "handover"
-        ? "<h2>Shift overview</h2><p></p><h2>Changes made</h2><p></p><h2>Open issues</h2><p></p><h2>Next steps</h2><p></p>"
-        : "<p></p>",
+      template === "guide"
+        ? '<h2>Purpose</h2><p>Describe what this guide helps the reader accomplish.</p><h2>Before you begin</h2><p>List access, equipment, and reference manuals needed.</p><section data-type="guide-step" class="guide-step"><h3>Prepare the workspace</h3><p>Write the first action and how to verify it. Use Insert tutorial step to add instructions with screenshots.</p></section><p></p>'
+        : template === "handover"
+          ? "<h2>Shift overview</h2><p></p><h2>Changes made</h2><p></p><h2>Open issues</h2><p></p><h2>Next steps</h2><p></p>"
+          : "<p></p>",
   };
 }
 export function findIPMatches(text) {

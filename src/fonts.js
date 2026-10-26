@@ -12,10 +12,10 @@ export const FONT_FAMILIES = [
 export const BRAND_PRESETS = {
   SHIFTnotes: {
     name: "SHIFTnotes",
-    primary: "#173f3d",
-    accent: "#d6a566",
+    primary: "#171a20",
+    accent: "#c92f38",
     bodyFont: "DM Sans",
-    headingFont: "Manrope",
+    headingFont: "Space Grotesk",
   },
   AVTrack: {
     name: "AVTrack",
